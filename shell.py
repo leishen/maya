@@ -6,54 +6,37 @@ def errcheck(result, func, args):
 
 
 def test1():
-    from windows.security import (CreateWellKnownSid,
-                                  ConvertSidToStringSidW,
-                                  LookupAccountSidW,
-                                  GetFileSecurityW,
-                                  OWNER_SECURITY_INFORMATION,
-                                  GROUP_SECURITY_INFORMATION,
-                                  DACL_SECURITY_INFORMATION,
-                                  SACL_SECURITY_INFORMATION)
+    from windows import Advapi32
 
-    sid = CreateWellKnownSid(22)
+    try:
+        sid = Advapi32.CreateWellKnownSid(0xff)
+    except OSError as e:
+        print(e.winerror)
+        print(dir(e))
+
+    sid = Advapi32.CreateWellKnownSid(22)
     print(sid)
-    # print("foo")
-    stringsid = ConvertSidToStringSidW(sid)
-    print(stringsid)
 
-    name, domain, snu = LookupAccountSidW(sid=sid)
+    # print("foo")
+    string_sid = Advapi32.ConvertSidToStringSidW(sid)
+    print(string_sid)
+
+    name, domain, snu = Advapi32.LookupAccountSidW(sid=sid)
     print(name, domain, snu)
 
 
-    sd = GetFileSecurityW("C:\\Windows\\system32\\ntdll.dll",
-                          OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION |
-                          DACL_SECURITY_INFORMATION| SACL_SECURITY_INFORMATION)
-    print(sd)
-
 def test2():
-    from ctypeshelper.ctypeshelper import HelperFunc, InParam, InOutParam, ReturnOutParam
     import ctypes
-    from ctypes import c_ubyte, POINTER, c_void_p, pointer, WINFUNCTYPE
-    from ctypes.wintypes import LPWSTR, DWORD, LPDWORD, BOOL
-    advapi32 = ctypes.windll.advapi32
+    from windows import Advapi32, TOKEN_QUERY
+    hProc = ctypes.windll.kernel32.GetCurrentProcess()
+    print(hProc)
 
-    SECURITY_MAX_SID_SIZE = 68
-    PLPWSTR = POINTER(LPWSTR)
-    SID = c_ubyte * SECURITY_MAX_SID_SIZE
-    PSID = POINTER(SID)
-
-    CreateWellKnownSid = HelperFunc(WINFUNCTYPE, "CreateWellKnownSid", advapi32, BOOL)
-    CreateWellKnownSid.params = [
-        InParam(DWORD, "WellKnownSidType", None),
-        InParam(c_void_p, "DomainSid", lambda: c_void_p(0)),
-        ReturnOutParam(PSID, "pSid", lambda: pointer(SID(0))),
-        InOutParam(LPDWORD, "cbSid", lambda: pointer(DWORD(SECURITY_MAX_SID_SIZE)))
-    ]
-
-    sid = CreateWellKnownSid(22)
-    print(sid)
-
+    hToken = Advapi32.OpenProcessToken(hProc, TOKEN_QUERY)
+    print(hToken)
 
 
 if __name__ == "__main__":
-    test1()
+    from ctypeshelper import InParam
+
+    # test1()
+    test2()

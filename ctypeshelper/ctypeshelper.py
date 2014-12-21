@@ -1,27 +1,30 @@
 from _ctypes import Array
 
-__all__ = ['InParam', 'ReturnInParam',
+__all__ = ['RawParam', 'ResolvedParam',
+           'InParam', 'ReturnInParam',
            'OutParam', 'ReturnOutParam',
            'InOutParam', 'ReturnInOutParam',
            'HelperFunc']
 
 
 class RawParam:
+    """A raw parameter that resolves to itself.  Useful for debugging
+    and for one-off cases only.
+    """
     def __init__(self, name, flags, ctype, generator, should_return):
         self._name = name
         self._flags = flags     # direction
-        self._paramtype = ctype
+        self._param_type = ctype
         self._generate = generator
         self._should_return = should_return
-        self._instance = None
 
     @property
     def flags(self):
         return self._flags
 
     @property
-    def paramtype(self):
-        return self._paramtype
+    def param_type(self):
+        return self._param_type
 
     @property
     def name(self):
@@ -31,8 +34,8 @@ class RawParam:
     def should_return(self):
         return self._should_return
 
-    def resolve(self):
-        return self._instance
+    def resolve(self, p):
+        return p
 
     @property
     def has_generator(self):
@@ -43,20 +46,18 @@ class RawParam:
 
 
 class ResolvedParam(RawParam):
-    @staticmethod
-    def map_ctype(p):
-        # print(dir(p))
-        if hasattr(p, "value"):
+    """A parameter that can be resolved from a ctypes type to a native Python type"""
+    def resolve(self, p):
+        # TODO Find a good way to do a type safety check.  Otherwise, this class is effectively useless
+        # How do we determine that one ctypes type can be interpreted as another?  Should we?
+        if hasattr(p, "value"):             # basic type
             return p.value
-        elif hasattr(p, "contents"):
-            return ResolvedParam.map_ctype(p.contents)
+        elif hasattr(p, "contents"):        # pointer type
+            return self.resolve(p.contents)
         elif isinstance(p, Array):
             return bytes(p[:])
         else:
             return p
-
-    def resolve(self):
-        return ResolvedParam.map_ctype(self._instance)
 
 
 class InParam(ResolvedParam):
@@ -95,7 +96,7 @@ class HelperFunc:
         self._name = name
         self._module = module
         self._rettype = ret
-        self._params = ()
+        self._params = ()       # These MUST not store any actual instance information
 
     @staticmethod
     def errcheck(result, func, args):
@@ -103,11 +104,8 @@ class HelperFunc:
         # return just the output params
         ret = []
         for i in range(len(obj.params)):
-            # Output param?
             if 'Return' in obj.params[i].__class__.__name__:
-                obj.params[i]._instance = args[i]
-                # ret.append(map_ctype(args[i]))
-                ret.append(obj.params[i].resolve())
+                ret.append(obj.params[i].resolve(args[i]))
         return ret
 
     @property
@@ -122,7 +120,7 @@ class HelperFunc:
         self._params = tuple(value)
 
     def __call__(self, *args, **kwargs):
-        prototype = self._gen(self._rettype, *[x.paramtype for x in self._params])
+        prototype = self._gen(self._rettype, *[x.param_type for x in self._params])
         paramflags = []
         for p in self._params:
             if p.has_generator:

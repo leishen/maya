@@ -3,7 +3,7 @@ from ctypes.wintypes import *
 from .ctypeshelper import HelperFunc
 
 
-__all__ = ['WinFunc', 'HresultWinFunc', 'BoolWinFunc']
+__all__ = ['WinFunc', 'WinapiWinFunc', 'HresultWinFunc', 'BoolWinFunc']
 
 
 class WinFunc(HelperFunc):
@@ -14,6 +14,17 @@ class WinFunc(HelperFunc):
 
 
 class HresultWinFunc(WinFunc):
+    def __init__(self, name, module):
+        super().__init__(name, module, HRESULT)
+
+    @staticmethod
+    def errcheck(result, func, args):
+        if 0 != result:
+            raise WinError()
+        return WinFunc.errcheck(result, func, args)
+
+
+class WinapiWinFunc(WinFunc):
     def __init__(self, name, module):
         super().__init__(name, module, HRESULT)
 
