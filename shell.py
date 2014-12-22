@@ -6,7 +6,7 @@ def errcheck(result, func, args):
 
 
 def test1():
-    from windows import Advapi32
+    from winapi import Advapi32
 
     try:
         sid = Advapi32.CreateWellKnownSid(0xff)
@@ -27,7 +27,7 @@ def test1():
 
 def test2():
     import ctypes
-    from windows import Advapi32, TOKEN_QUERY
+    from winapi import Advapi32, TOKEN_QUERY
     hProc = ctypes.windll.kernel32.GetCurrentProcess()
     print(hProc)
 

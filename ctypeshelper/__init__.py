@@ -1,4 +1,10 @@
-from .ctypeshelper import *
-from .windows import *
+"""Ctypeshelper is an implementation meant to make creating native function calls
+using ctypes easier.  It contains markup for specifying the function, its parameters,
+default functions to generate new parameter when functions are called, and logic to
+specify which parameters are returned and which are ignored on return.
+"""
 
-__all__ = [dir()]
+from .ctypeshelper import *
+
+__all__ = ['RawParam', 'ResolvedParam', 'InParam', 'ReturnInParam', 'OutParam', 'ReturnOutParam', 'InOutParam',
+           'ReturnInOutParam', 'HelperFunc']

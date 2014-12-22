@@ -2,24 +2,17 @@
 
 from ctypes import *
 from ctypes.wintypes import *
-from ctypeshelper.ctypeshelper import *
-from ctypeshelper.windows import *
+from ctypeshelper import *
+from .functions import BoolWinFunc, WinapiWinFunc
+
+
+__all__ = ['Advapi32', 'TokenPrivileges', 'WellKnownSidTypes', 'SecurityInformation', 'SECURITY_MAX_SID_SIZE']
+
 
 advapi32 = ctypes.windll.advapi32
 
 # Constants
 SECURITY_MAX_SID_SIZE = 68
-
-
-TOKEN_ASSIGN_PRIMARY = 0x0001
-TOKEN_DUPLICATE = 0x0002
-TOKEN_IMPERSONATE = 0x0004
-TOKEN_QUERY = 0x0008
-TOKEN_QUERY_SOURCE = 0x0010
-TOKEN_ADJUST_PRIVILEGES = 0x0020
-TOKEN_ADJUST_GROUPS = 0x0040
-TOKEN_ADJUST_DEFAULT = 0x0080
-TOKEN_ADJUST_SESSIONID = 0x0100
 
 # Types
 SID = c_ubyte * SECURITY_MAX_SID_SIZE
@@ -119,10 +112,19 @@ _OpenThreadToken.params = [
 _RevertToSelf = BoolWinFunc("RevertToSelf", advapi32)
 
 
-class Advapi32:
-    #
-    # Constants
-    #
+class TokenPrivileges:
+    TOKEN_ASSIGN_PRIMARY = 0x0001
+    TOKEN_DUPLICATE = 0x0002
+    TOKEN_IMPERSONATE = 0x0004
+    TOKEN_QUERY = 0x0008
+    TOKEN_QUERY_SOURCE = 0x0010
+    TOKEN_ADJUST_PRIVILEGES = 0x0020
+    TOKEN_ADJUST_GROUPS = 0x0040
+    TOKEN_ADJUST_DEFAULT = 0x0080
+    TOKEN_ADJUST_SESSIONID = 0x0100
+
+
+class SecurityInformation:
     OWNER_SECURITY_INFORMATION = 0x00000001
     GROUP_SECURITY_INFORMATION = 0x00000002
     DACL_SECURITY_INFORMATION = 0x00000004
@@ -138,27 +140,99 @@ class Advapi32:
     UNPROTECTED_DACL_SECURITY_INFORMATION = 0x20000000
     UNPROTECTED_SACL_SECURITY_INFORMATION = 0x10000000
 
-    SECURITY_MAX_SID_SIZE = 68
 
+class WellKnownSidType:
     WinNullSid = 0
 
-    #
-    # Types
-    #
-    SID = c_ubyte * SECURITY_MAX_SID_SIZE
-    PSID = POINTER(SID)
 
-    #
-    # APIs
-    #
-    ConvertSidToStringSidW = _ConvertSidToStringSidW
-    CreateWellKnownSid = _CreateWellKnownSid
-    GetFileSecurityW = _GetFileSecurityW
-    GetSecurityInfo = _GetSecurityInfo
-    ImpersonateSelf = _ImpersonateSelf
-    LookupAccountSidW = _LookupAccountSidW
+class Advapi32:
+    """ctypes implementations of Security-related APIs from advapi32.dll"""
+    @staticmethod
+    def ConvertSidToStringSidW(sid) -> str:
+        """Converts a security identifier (SID) to a string format suitable for display, storage, or transmission.
+
+        :param sid: Binary security identifier, as a bytes string
+        :return: str represening the SID as a string"""
+        return _ConvertSidToStringSidW(sid)
+
+    @staticmethod
+    def CreateWellKnownSid(WellKnownSidType) -> SID:
+        """Creates a SID for predefined aliases
+
+        :param WellKnownSidType: Specifies what the SID will identify, values defined in the WellKnownSidType class
+        :return: SID
+        """
+        return _CreateWellKnownSid(WellKnownSidType)
+
+    @staticmethod
+    def GetFileSecurityW(lpFileName, RequestedInformation) -> bytes:
+        """Obtains specified information about the security of a file or directory. The information obtained is
+        constrained by the caller's access rights and privileges.
+
+        :param lpFileName: File or directory for which security information is retrieved
+        :param RequestedInformation: value that identifies the security information being requested, from
+                                     SecurityInformation
+        :return: Security descriptor, as a bytes string
+        """
+        return _GetFileSecurityW(lpFileName, RequestedInformation)
+
+    @staticmethod
+    def GetSecurityInfo(handle, ObjectType, SecurityInfo):
+        """Retrieves a copy of the security descriptor for an object specified by a handle
+
+        :param handle: Handle to an object
+        :param ObjectType: SE_OBJECT_TYPE enumeration value that indicates the type of object
+        :param SecurityInfo:  type of security information to retrieve
+
+        :return:  -> (owner, group, dacl, sacl, security_descriptor)
+        """
+        return _GetSecurityInfo(handle, ObjectType, SecurityInfo)
+
+    @staticmethod
+    def ImpersonateSelf():
+        """Obtains an access token that impersonates the security context of the calling process. The token is
+        assigned to the calling thread.
+        """
+        return _ImpersonateSelf()
+
+    @staticmethod
+    def LookupAccountSidW(sid, system=None):
+        """Retrieve the name of the account for a SID and the name of the first domain on which this SID is found
+
+        :param sid: The SID (as a bytes array) to identify
+        :param system: The system on which to search.  None defaults to the local computer
+
+        :return: (name, domain, sid_name_use)
+        """
+        return _LookupAccountSidW(system, sid)
+
     # MakeAbsoluteSD = _MakeAbsoluteSD
-    OpenProcessToken = _OpenProcessToken
-    OpenThreadToken = _OpenThreadToken
-    RevertToSelf = _RevertToSelf
+    @staticmethod
+    def OpenProcessToken(ProcessHandle, DesiredAccess):
+        """Opens the access token associated with a process
+
+        :param ProcessHandle: A handle to the process whose access token is opened. The process must have the
+                              PROCESS_QUERY_INFORMATION access permission
+        :param DesiredAccess: Specifies an access mask that specifies the requested types of access to the access token
+        :return: Handle to the process token, as an int
+        """
+        return _OpenProcessToken(ProcessHandle, DesiredAccess)
+
+    @staticmethod
+    def OpenThreadToken(ThreadHandle, DesiredAccess, OpenAsSelf=True):
+        """Opens the access token associated with a thread
+
+        :param ThreadHandle: A handle to the thread whose access token is opened.
+        :param DesiredAccess: Specifies an access mask that specifies the requested types of access to the access token.
+        :param OpenAsSelf: TRUE if the access check is to be made against the process-level security context.
+                           FALSE if the access check is to be made against the current security context of the thread
+                           calling the OpenThreadToken function.
+        :return: Handle to the thread token, as an int
+        """
+        return _OpenThreadToken(ThreadHandle, DesiredAccess, OpenAsSelf)
+
+    @staticmethod
+    def RevertToSelf():
+        """Terminates the impersonation of a client application"""
+        return _RevertToSelf()
 

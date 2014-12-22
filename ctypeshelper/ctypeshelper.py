@@ -20,28 +20,43 @@ class RawParam:
 
     @property
     def flags(self):
+        """The directionality of the parameters for ctypes:
+        1 -> input
+        2 -> output
+        4 -> input, defaults to 0
+        """
         return self._flags
 
     @property
     def param_type(self):
+        """The ctypes type of the parameter"""
         return self._param_type
 
     @property
     def name(self):
+        """The name of the function"""
         return self._name
 
     @property
     def should_return(self):
+        """Specifies whether this parameter should be returned when the function returns.  In many cases,
+        output parameters from ctypes are not meaningful to Python, and can be filtered using this flag.
+        """
         return self._should_return
 
-    def resolve(self, p):
-        return p
+    def resolve(self, instance):
+        """Attempt to map an instance of a ctypes variable to a native Python type"""
+        return instance
 
     @property
     def has_generator(self):
+        """Specifies whether this parameter has a generator.  See :func:`generate`"""
         return self._generate is not None
 
     def generate(self):
+        """Used to generate a new instance of the parameter.  This is used to create a new input to a function
+        call every time it is done, which defeats the problem inherent in ctypes in which parameters are reused
+        when ctypes functions are specified globally"""
         return self._generate()
 
 
@@ -61,31 +76,37 @@ class ResolvedParam(RawParam):
 
 
 class InParam(ResolvedParam):
+    """An input parameter to a function"""
     def __init__(self, ctype, name, generator=None):
         super(self.__class__, self).__init__(name, 1, ctype, generator, False)
 
 
 class ReturnInParam(ResolvedParam):
+    """An input parameter that we wish to return upon execution of the foreign function"""
     def __init__(self, ctype, name, generator=None):
         super(self.__class__, self).__init__(name, 1, ctype, generator, True)
 
 
 class OutParam(ResolvedParam):
+    """A ctypes output parameter"""
     def __init__(self, ctype, name, generator=None):
         super(self.__class__, self).__init__(name, 2, ctype, generator, False)
 
 
 class ReturnOutParam(ResolvedParam):
+    """A ctypes output parameter that we wish to return from the foreign function"""
     def __init__(self, ctype, name, generator=None):
         super(self.__class__, self).__init__(name, 2, ctype, generator, True)
 
 
 class InOutParam(ResolvedParam):
+    """A ctypes in/out parameter"""
     def __init__(self, ctype, name, generator=None):
         super(self.__class__, self).__init__(name, 3, ctype, generator, False)
 
 
 class ReturnInOutParam(ResolvedParam):
+    """A ctypes in/out parameter that we wish to return from the foreign function"""
     def __init__(self, ctype, name, generator=None):
         super(self.__class__, self).__init__(name, 3, ctype, generator, True)
 

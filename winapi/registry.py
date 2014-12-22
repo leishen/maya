@@ -2,8 +2,11 @@
 import winreg
 from collections import namedtuple
 
+__all__ = ['Key', 'Value', 'RegKey']
+
 Key = namedtuple('Key', 'subkeys', 'values', 'modified')
 Value = namedtuple('Value', 'name', 'type', 'data')
+
 
 class RegKey:
     def __init__(self, hive, key):

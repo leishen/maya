@@ -1,6 +1,5 @@
 from unittest import TestCase
-from windows import Advapi32, TOKEN_QUERY
-from ctypes import WinError
+from winapi.security import Advapi32, TokenPrivileges, SecurityInformation
 import os.path
 
 
@@ -31,14 +30,14 @@ class TestAdvapi32(TestCase):
         f = "C:\\Windows\\system32\\ntdll.dll"
         self.failIf(not os.path.exists(f))
         sd = Advapi32.GetFileSecurityW(f,
-                                       Advapi32.OWNER_SECURITY_INFORMATION |
-                                       Advapi32.GROUP_SECURITY_INFORMATION |
-                                       Advapi32.DACL_SECURITY_INFORMATION)
+                                       SecurityInformation.OWNER_SECURITY_INFORMATION |
+                                       SecurityInformation.GROUP_SECURITY_INFORMATION |
+                                       SecurityInformation.DACL_SECURITY_INFORMATION)
         self.assertIsNotNone(sd)
 
     def test_OpenProcessToken(self):
         import ctypes
         hProc = ctypes.windll.kernel32.GetCurrentProcess()
         self.assertEqual(hProc, -1)
-        hToken = Advapi32.OpenProcessToken(hProc, TOKEN_QUERY)
+        hToken = Advapi32.OpenProcessToken(hProc, TokenPrivileges.TOKEN_QUERY)
         self.assertIsNot(0, hToken, msg="Failed to call OpenProcessToken properly")

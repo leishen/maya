@@ -6,12 +6,25 @@
 Welcome to Maya's documentation!
 ================================
 
-Contents:
+Maya is a set of modules meant to ease experimentation with the Windows APIs using ctypes.
 
 .. toctree::
    :maxdepth: 2
 
+Ctypeshelper
+============
+.. automodule :: ctypeshelper
+   :members:
+   :undoc-members:
 
+winapi
+======
+.. automodule :: winapi.security
+   :members:
+   :undoc-members:
+
+Examples
+========
 
 Indices and tables
 ==================

@@ -1,9 +1,9 @@
-from ctypes import *
-from ctypes.wintypes import *
-from .ctypeshelper import HelperFunc
+from ctypes import WINFUNCTYPE, WinError, HRESULT
+from ctypes.wintypes import BOOL
+from ctypeshelper import HelperFunc
 
 
-__all__ = ['WinFunc', 'WinapiWinFunc', 'HresultWinFunc', 'BoolWinFunc']
+__all__ = ['WinFunc', 'HresultWinFunc', 'WinapiWinFunc', 'BoolWinFunc']
 
 
 class WinFunc(HelperFunc):
@@ -44,4 +44,3 @@ class BoolWinFunc(WinFunc):
         if 0 == result:
             raise WinError()
         return WinFunc.errcheck(result, func, args)
-

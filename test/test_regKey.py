@@ -1,5 +1,5 @@
 from unittest import TestCase
-from windows.registry import RegKey
+from winapi.registry import RegKey
 import winreg
 
 class TestRegKey(TestCase):
