@@ -1,5 +1,5 @@
 from unittest import TestCase
-from winapi.security import Advapi32, TokenPrivileges, SecurityInformation
+from winapi.advapi32 import Advapi32, TokenPrivileges, SecurityInformation
 import os.path
 
 

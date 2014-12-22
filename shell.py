@@ -6,7 +6,7 @@ def errcheck(result, func, args):
 
 
 def test1():
-    from winapi import Advapi32
+    from winapi.advapi32 import Advapi32
 
     try:
         sid = Advapi32.CreateWellKnownSid(0xff)
@@ -21,22 +21,22 @@ def test1():
     string_sid = Advapi32.ConvertSidToStringSidW(sid)
     print(string_sid)
 
-    name, domain, snu = Advapi32.LookupAccountSidW(sid=sid)
+    name, domain, snu = Advapi32.LookupAccountSidW(sid)
     print(name, domain, snu)
 
 
 def test2():
     import ctypes
-    from winapi import Advapi32, TOKEN_QUERY
+    from winapi.advapi32 import Advapi32, TokenPrivileges
     hProc = ctypes.windll.kernel32.GetCurrentProcess()
     print(hProc)
 
-    hToken = Advapi32.OpenProcessToken(hProc, TOKEN_QUERY)
+    hToken = Advapi32.OpenProcessToken(hProc, TokenPrivileges.TOKEN_QUERY)
     print(hToken)
 
 
 if __name__ == "__main__":
     from ctypeshelper import InParam
 
-    # test1()
+    test1()
     test2()

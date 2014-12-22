@@ -19,9 +19,18 @@ Ctypeshelper
 
 winapi
 ======
+The winapi module contains useful (though not necessarily performant) implementations of useful Windows API calls.
+
+security
+--------
 .. automodule :: winapi.security
    :members:
    :undoc-members:
+
+registry
+--------
+.. automodule :: winapi.registry
+   :members:
 
 Examples
 ========

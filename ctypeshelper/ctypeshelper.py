@@ -21,6 +21,7 @@ class RawParam:
     @property
     def flags(self):
         """The directionality of the parameters for ctypes:
+
         1 -> input
         2 -> output
         4 -> input, defaults to 0
