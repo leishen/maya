@@ -6,7 +6,8 @@ from ctypeshelper import *
 from .functions import BoolWinFunc, WinapiWinFunc
 
 
-__all__ = ['Advapi32', 'TokenPrivileges', 'WellKnownSidTypes', 'SecurityInformation', 'SECURITY_MAX_SID_SIZE']
+__all__ = ['Advapi32', 'TokenPrivileges', 'WellKnownSidTypes', 'SecurityInformation', 'SECURITY_MAX_SID_SIZE',
+           'TokenAccessRights', 'TOKEN_INFORMATION_CLASS']
 
 
 advapi32 = ctypes.windll.advapi32
@@ -20,6 +21,156 @@ PSID = POINTER(SID)
 ACL = c_ubyte * 1024
 PACL = POINTER(ACL)
 SECURITY_DESCRIPTOR = c_ubyte * 1024
+
+
+# TODO GetTokenInformation needs a union of all possible structures
+class LUID(Structure):
+    _fields_ = [
+        ("LowPart", DWORD),
+        ("HighPart", LONG)
+    ]
+
+
+class SID_AND_ATTRIBUTES(Structure):
+    _fields_ = [
+        ("Sid", PSID),
+        ("Attributes", DWORD)
+    ]
+
+
+class LUID_AND_ATTRIBUTES(Structure):
+    _fields_ = [
+        ("Luid", LUID),
+        ("Attributes", DWORD)
+    ]
+
+
+class TOKEN_GROUPS(Structure):
+    _fields_ = [
+        ("GropuCount", DWORD),
+        ("Groups", SID_AND_ATTRIBUTES * 64)             # Arbitrarily chose a size.  Should be ANYSIZE_ARRAY
+    ]
+
+
+class TOKEN_PRIVILEGES(Structure):
+    _fields_ = [
+        ("PrivilegeCount", DWORD),
+        ("Privileges", LUID_AND_ATTRIBUTES * 64)        # Arbitrarily chose a size.  Should be ANYSIZE_ARRAY
+    ]
+
+
+class TOKEN_USER(Structure):
+    _fields_ = [
+        ("User", SID_AND_ATTRIBUTES)
+    ]
+
+
+class TOKEN_INFORMATION_CLASS:
+    (TokenUser,
+     TokenGroups,
+     TokenPrivileges,
+     TokenOwner,
+     TokenPrimaryGroup,
+     TokenDefaultDacl,
+     TokenSource,
+     TokenType,
+     TokenImpersonationLevel,
+     TokenStatistics,
+     TokenRestrictedSids,
+     TokenSessionId,
+     TokenGroupsAndPrivileges,
+     TokenSessionReference,
+     TokenSandBoxInert,
+     TokenAuditPolicy,
+     TokenOrigin,
+     TokenElevationType,
+     TokenLinkedToken,
+     TokenElevation,
+     TokenHasRestrictions,
+     TokenAccessInformation,
+     TokenVirtualizationAllowed,
+     TokenVirtualizationEnabled,
+     TokenIntegrityLevel,
+     TokenUIAccess,
+     TokenMandatoryPolicy,
+     TokenLogonSid,
+     TokenIsAppContainer,
+     TokenCapabilities,
+     TokenAppContainerSid,
+     TokenAppContainerNumber,
+     TokenUserClaimAttributes,
+     TokenDeviceClaimAttributes,
+     TokenRestrictedUserClaimAttributes,
+     TokenRestrictedDeviceClaimAttributes,
+     TokenDeviceGroups,
+     TokenRestrictedDeviceGroups,
+     TokenSecurityAttributes,
+     TokenIsRestricted,
+     MaxTokenInfoClass) = list(range(1, 42))
+
+
+class WellKnownSidType:
+    WinNullSid = 0
+
+
+class TokenInformation(Union):
+    _map_ = {
+        TOKEN_INFORMATION_CLASS.TokenUser: "TokenUser",
+        TOKEN_INFORMATION_CLASS.TokenPrivileges: "TokenPrivileges",
+        TOKEN_INFORMATION_CLASS.TokenGroups: "TokenGroups",
+        TOKEN_INFORMATION_CLASS.TokenImpersonationLevel: "TokenImpersonationLevel",
+        TOKEN_INFORMATION_CLASS.TokenSessionId: "TokenSessionId"
+    }
+
+    _fields_ = [
+        ("TokenUser", TOKEN_USER),
+        ("TokenPrivileges", TOKEN_PRIVILEGES),
+        ("TokenGroups", TOKEN_GROUPS),
+        ("TokenImpersonationLevel", DWORD),
+        ("TokenSessionId", DWORD)
+    ]
+
+
+class TokenAccessRights:
+    TOKEN_ASSIGN_PRIMARY = 0x0001
+    TOKEN_DUPLICATE = 0x0002
+    TOKEN_IMPERSONATE = 0x0004
+    TOKEN_QUERY = 0x0008
+    TOKEN_QUERY_SOURCE = 0x0010
+    TOKEN_ADJUST_PRIVILEGES = 0x0020
+    TOKEN_ADJUST_GROUPS = 0x0040
+    TOKEN_ADJUST_DEFAULT = 0x0080
+    TOKEN_ADJUST_SESSIONID = 0x0100
+
+
+class TokenPrivileges:
+    TOKEN_ASSIGN_PRIMARY = 0x0001
+    TOKEN_DUPLICATE = 0x0002
+    TOKEN_IMPERSONATE = 0x0004
+    TOKEN_QUERY = 0x0008
+    TOKEN_QUERY_SOURCE = 0x0010
+    TOKEN_ADJUST_PRIVILEGES = 0x0020
+    TOKEN_ADJUST_GROUPS = 0x0040
+    TOKEN_ADJUST_DEFAULT = 0x0080
+    TOKEN_ADJUST_SESSIONID = 0x0100
+
+
+class SecurityInformation:
+    OWNER_SECURITY_INFORMATION = 0x00000001
+    GROUP_SECURITY_INFORMATION = 0x00000002
+    DACL_SECURITY_INFORMATION = 0x00000004
+    SACL_SECURITY_INFORMATION = 0x00000008
+    LABEL_SECURITY_INFORMATION = 0x00000010
+    ATTRIBUTE_SECURITY_INFORMATION = 0x00000020
+    SCOPE_SECURITY_INFORMATION = 0x00000040
+    PROCESS_TRUST_LABEL_SECURITY_INFORMATION = 0x00000080
+    BACKUP_SECURITY_INFORMATION = 0x00010000
+
+    PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000
+    PROTECTED_SACL_SECURITY_INFORMATION = 0x40000000
+    UNPROTECTED_DACL_SECURITY_INFORMATION = 0x20000000
+    UNPROTECTED_SACL_SECURITY_INFORMATION = 0x10000000
+
 
 #
 # Functions
@@ -37,7 +188,7 @@ _CreateWellKnownSid = BoolWinFunc("CreateWellKnownSid", advapi32)
 _CreateWellKnownSid.params = [
     InParam(DWORD, "WellKnownSidType"),
     InParam(c_void_p, "DomainSid", lambda: c_void_p(0)),
-    ReturnOutParam(PSID, "pSid", lambda: pointer(SID(0))),
+    ReturnOutParam(PSID, "pSid", lambda: pointer(SID())),
     InOutParam(LPDWORD, "cbSid", lambda: pointer(DWORD(SECURITY_MAX_SID_SIZE)))
 ]
 
@@ -45,7 +196,7 @@ _GetFileSecurityW = BoolWinFunc("GetFileSecurityW", advapi32)
 _GetFileSecurityW.params = [
     InParam(LPWSTR, "lpFileName"),
     InParam(DWORD, "RequestedInformation"),
-    ReturnOutParam(POINTER(SECURITY_DESCRIPTOR), "pSecurityDescriptor", lambda: pointer(SECURITY_DESCRIPTOR(0))),
+    ReturnOutParam(POINTER(SECURITY_DESCRIPTOR), "pSecurityDescriptor", lambda: pointer(SECURITY_DESCRIPTOR())),
     InParam(DWORD, "nLength", lambda: DWORD(sizeof(SECURITY_DESCRIPTOR))),
     OutParam(POINTER(DWORD), "lpnLengthNeeded", lambda: pointer(DWORD(0)))
 ]
@@ -61,6 +212,17 @@ _GetSecurityInfo.params = [
     ReturnOutParam(POINTER(PACL), "ppDacl", lambda: pointer(PACL(0))),
     ReturnOutParam(POINTER(PACL), "ppSacl", lambda: pointer(PACL(0))),
     ReturnOutParam(POINTER(PSID), "ppSecurityDescriptor", lambda: pointer(PSID(0)))
+]
+
+_GetTokenInformation = BoolWinFunc("GetTokenInformation", advapi32)
+_GetTokenInformation.params = [
+    InParam(HANDLE, "TokenHandle"),
+    InParam(DWORD, "TokenInformationClass"),
+    ReturnOutParam(POINTER(TokenInformation), "TokenInformation",
+                   lambda: pointer(TokenInformation()),
+                   switch_is="TokenInformationClass"),
+    InParam(DWORD, "TokenInformationLength", lambda: 1024),
+    OutParam(PDWORD, "ReturnLength", lambda: pointer(DWORD(0)))
 ]
 
 _ImpersonateSelf = BoolWinFunc("ImpersonateSelf", advapi32)
@@ -98,7 +260,7 @@ _OpenProcessToken = BoolWinFunc("OpenProcessToken", advapi32)
 _OpenProcessToken.params = [
     InParam(HANDLE, "ProcessHandle"),
     InParam(DWORD, "DesiredAccess"),
-    ReturnOutParam(POINTER(HANDLE), "TokenHandle", lambda: pointer(HANDLE(0)))
+    ReturnOutParam(POINTER(HANDLE), "TokenHandle", lambda: pointer(HANDLE()))
 ]
 
 _OpenThreadToken = BoolWinFunc("OpenThreadToken", advapi32)
@@ -111,38 +273,6 @@ _OpenThreadToken.params = [
 
 _RevertToSelf = BoolWinFunc("RevertToSelf", advapi32)
 
-
-class TokenPrivileges:
-    TOKEN_ASSIGN_PRIMARY = 0x0001
-    TOKEN_DUPLICATE = 0x0002
-    TOKEN_IMPERSONATE = 0x0004
-    TOKEN_QUERY = 0x0008
-    TOKEN_QUERY_SOURCE = 0x0010
-    TOKEN_ADJUST_PRIVILEGES = 0x0020
-    TOKEN_ADJUST_GROUPS = 0x0040
-    TOKEN_ADJUST_DEFAULT = 0x0080
-    TOKEN_ADJUST_SESSIONID = 0x0100
-
-
-class SecurityInformation:
-    OWNER_SECURITY_INFORMATION = 0x00000001
-    GROUP_SECURITY_INFORMATION = 0x00000002
-    DACL_SECURITY_INFORMATION = 0x00000004
-    SACL_SECURITY_INFORMATION = 0x00000008
-    LABEL_SECURITY_INFORMATION = 0x00000010
-    ATTRIBUTE_SECURITY_INFORMATION = 0x00000020
-    SCOPE_SECURITY_INFORMATION = 0x00000040
-    PROCESS_TRUST_LABEL_SECURITY_INFORMATION = 0x00000080
-    BACKUP_SECURITY_INFORMATION = 0x00010000
-
-    PROTECTED_DACL_SECURITY_INFORMATION = 0x80000000
-    PROTECTED_SACL_SECURITY_INFORMATION = 0x40000000
-    UNPROTECTED_DACL_SECURITY_INFORMATION = 0x20000000
-    UNPROTECTED_SACL_SECURITY_INFORMATION = 0x10000000
-
-
-class WellKnownSidType:
-    WinNullSid = 0
 
 
 class Advapi32:
@@ -187,6 +317,10 @@ class Advapi32:
         :return:  -> (owner, group, dacl, sacl, security_descriptor)
         """
         return _GetSecurityInfo(handle, ObjectType, SecurityInfo)
+
+    @staticmethod
+    def GetTokenInformation(handle, TokenInformationClass):
+        return _GetTokenInformation(handle, TokenInformationClass)
 
     @staticmethod
     def ImpersonateSelf():

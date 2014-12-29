@@ -1,5 +1,5 @@
 from ctypes import WINFUNCTYPE, WinError, HRESULT
-from ctypes.wintypes import BOOL
+from ctypes.wintypes import BOOL, HANDLE
 from ctypeshelper import HelperFunc
 
 
@@ -44,3 +44,14 @@ class BoolWinFunc(WinFunc):
         if 0 == result:
             raise WinError()
         return WinFunc.errcheck(result, func, args)
+
+
+class HandleWinFunc(WinFunc):
+    def __init__(self, name, module):
+        super().__init__(name, module, HANDLE)
+
+    @staticmethod
+    def errcheck(result, func, args):
+        if result == -1:
+            raise WinError()
+        return args

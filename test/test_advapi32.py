@@ -1,6 +1,8 @@
 from unittest import TestCase
-from winapi.advapi32 import Advapi32, TokenPrivileges, SecurityInformation
+from winapi.advapi32 import Advapi32, TokenPrivileges, SecurityInformation, TOKEN_INFORMATION_CLASS
 import os.path
+import ctypes
+
 
 
 class TestAdvapi32(TestCase):
@@ -18,7 +20,7 @@ class TestAdvapi32(TestCase):
         sid = Advapi32.CreateWellKnownSid(22)
         self.assertIsNotNone(sid)
 
-        name, domain, snu = Advapi32.LookupAccountSidW(sid=sid)
+        name, domain, snu = Advapi32.LookupAccountSidW(sid)
         self.assertEqual(name, "SYSTEM")
         self.assertEqual(domain, "NT AUTHORITY")
         self.assertEqual(snu, 5)
@@ -36,8 +38,14 @@ class TestAdvapi32(TestCase):
         self.assertIsNotNone(sd)
 
     def test_OpenProcessToken(self):
-        import ctypes
         hProc = ctypes.windll.kernel32.GetCurrentProcess()
         self.assertEqual(hProc, -1)
         hToken = Advapi32.OpenProcessToken(hProc, TokenPrivileges.TOKEN_QUERY)
         self.assertIsNot(0, hToken, msg="Failed to call OpenProcessToken properly")
+
+    def test_GetTokenInformation(self):
+        hProc = ctypes.windll.kernel32.GetCurrentProcess()
+        self.assertEqual(hProc, -1)
+        hToken = Advapi32.OpenProcessToken(hProc, TokenPrivileges.TOKEN_QUERY)
+        self.assertIsNot(0, hToken, msg="Failed to call OpenProcessToken properly")
+        info = Advapi32.GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenUser)
