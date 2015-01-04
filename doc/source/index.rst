@@ -11,43 +11,43 @@ Maya is a set of modules meant to ease experimentation with the Windows APIs usi
 .. toctree::
    :maxdepth: 2
 
-Ctypeshelper
-============
-.. automodule :: ctypeshelper
+maya.ctypeshelper
+=================
+.. automodule :: maya.ctypeshelper
    :members:
    :undoc-members:
 
-winapi
-======
+maya.winapi
+===========
 
 The winapi module contains useful (though not necessarily performant) implementations of common Windows API calls.
 
 advapi32
 --------
-.. automodule :: winapi.advapi32
+.. automodule :: maya.winapi.advapi32
    :members:
    :undoc-members:
 
 kernel32
 --------
-.. automodule :: winapi.kernel32
+.. automodule :: maya.winapi.kernel32
    :members:
    :undoc-members:
 
-winutils
-========
+maya.winutils
+=============
 
 Contains useful, functional wrappers around the winapi module to make interacting with Windows more Pythonic.
 
 security
 --------
-.. automodule :: winutils.security
+.. automodule :: maya.winutils.security
    :members:
    :undoc-members:
 
 registry
 --------
-.. automodule :: winutils.registry
+.. automodule :: maya.winutils.registry
    :members:
 
 Examples
