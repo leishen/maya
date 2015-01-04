@@ -1,6 +1,5 @@
 from ctypes import *
-import logging
-from ctypeshelper import resolve
+from maya.ctypeshelper import resolve
 
 
 class TestSubUnion(Union):
@@ -59,7 +58,7 @@ def errcheck(result, func, args):
 
 
 def test1():
-    from winapi.advapi32 import Advapi32
+    from maya.winapi.advapi32 import Advapi32
 
     try:
         sid = Advapi32.CreateWellKnownSid(0xff)
@@ -80,7 +79,7 @@ def test1():
 
 def test2():
     import ctypes
-    from winapi.advapi32 import Advapi32, TokenPrivileges
+    from maya.winapi.advapi32 import Advapi32, TokenPrivileges
     hProc = ctypes.windll.kernel32.GetCurrentProcess()
     print(hProc)
 
@@ -89,7 +88,7 @@ def test2():
 
 
 def test3():
-    from winapi.kernel32 import Kernel32, Toolhelp32Flags as th
+    from maya.winapi.kernel32 import Kernel32, Toolhelp32Flags as th
 
     hSnapshot = Kernel32.CreateToolhelp32Snapshot(th.TH32CS_SNAPALL)
     proc = Kernel32.Process32First(hSnapshot)
@@ -104,12 +103,12 @@ def test3():
 
 def test4():
     import ctypes
-    from winapi.advapi32 import Advapi32, TokenPrivileges, TOKEN_INFORMATION_CLASS
+    from maya.winapi.advapi32 import Advapi32, TokenPrivileges, TokenInformationClass
     hProc = ctypes.windll.kernel32.GetCurrentProcess()
     print(hProc)    # Will be -1
     hToken = Advapi32.OpenProcessToken(hProc, TokenPrivileges.TOKEN_QUERY)
     print(hToken)
-    info = Advapi32.GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenUser)
+    info = Advapi32.GetTokenInformation(hToken, TokenInformationClass.TokenUser)
     print(info)
 
 
@@ -118,17 +117,59 @@ def test5():
     x.switch = 4
     x.field.four.switch = 3
     x.field.four.field.three = 42
-    y = resolve(x, {})
+    y = resolve(x)
     print("Frag" + str(y))
 
 
+def test6():
+    from maya.winutils.osinfo import whoami, get_effective_token
+
+    print(whoami())
+    token = get_effective_token()
+    print(token)
+    for priv in token.privileges:
+        print("Enabling {0}".format(priv.name))
+        token.enable_privilege(priv)
+
+    #for proc in find_user_processes("SYSTEM"):
+    #    print(proc)
+    #    try:
+    #        token = proc.get_token()
+    #        print(token.user)
+    #        for p in token.privileges:
+    #            print(p)
+    #    except PermissionError:
+    #        print("Couldn't open {0}".format(proc.pid))
+    #    print("")
+
+def test7():
+    from maya.ctypeshelper import AutoStructure
+
+    class SubStructure(AutoStructure):
+        _fields_ = [
+            ("Int", c_uint),
+            ("Byte", c_ubyte)
+        ]
+
+    class TestStructure(AutoStructure):
+        _fields_ = [
+            ("Basic", c_ulong),
+            ("Array", c_ubyte * 8),
+            ("MyStruct", SubStructure)
+        ]
+    d = {'Int': 1, 'Byte': 2}
+    struct = TestStructure()
+    print(struct.MyStruct)
+    struct.MyStruct = d
+    print(struct.MyStruct)
+
 if __name__ == "__main__":
-    import logging
-    logging.basicConfig(level=logging.DEBUG)
-    from ctypeshelper import InParam
+    # logging.basicConfig(level=logging.DEBUG)
 
     # test1()
     # test2()
-    # test3()
-    #test4()
+    test3()
+    # test4()
     test5()
+    # test6()
+    test7()
