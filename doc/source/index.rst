@@ -19,21 +19,40 @@ Ctypeshelper
 
 winapi
 ======
-The winapi module contains useful (though not necessarily performant) implementations of useful Windows API calls.
+
+The winapi module contains useful (though not necessarily performant) implementations of common Windows API calls.
+
+advapi32
+--------
+.. automodule :: winapi.advapi32
+   :members:
+   :undoc-members:
+
+kernel32
+--------
+.. automodule :: winapi.kernel32
+   :members:
+   :undoc-members:
+
+winutils
+========
+
+Contains useful, functional wrappers around the winapi module to make interacting with Windows more Pythonic.
 
 security
 --------
-.. automodule :: winapi.security
+.. automodule :: winutils.security
    :members:
    :undoc-members:
 
 registry
 --------
-.. automodule :: winapi.registry
+.. automodule :: winutils.registry
    :members:
 
 Examples
 ========
+
 
 Indices and tables
 ==================

@@ -1,15 +1,101 @@
 from _ctypes import Array, Structure, Union
+from ctypes import sizeof
 import logging
 
-__all__ = ['RawParam', 'ResolvedParam',
-           'InParam', 'ReturnInParam',
-           'OutParam', 'ReturnOutParam',
-           'InOutParam', 'ReturnInOutParam',
-           'HelperFunc',
-           'resolve']
+
+def struct2dict(cval):
+    if not isinstance(cval, Structure):
+        raise ValueError("Must be a structure")
+    d = {}
+    if hasattr(cval, '_unions_'):
+        d['_unions_'] = cval._unions_
+    for name, typ in cval._fields_:
+        d[name] = getattr(cval, name)
+    return d
 
 
-# TODO Add MIDL attributes for unions et al.
+def resolve(cval):
+    def resolve_union(cval, switch):
+        if hasattr(cval.__class__, "_map_"):
+            which = cval._map_[switch]
+            return resolve(getattr(cval, which))
+        else:
+            return cval
+
+    if hasattr(cval, "value"):             # basic type
+        return cval.value
+    elif hasattr(cval, "contents"):        # pointer type
+        ret = resolve(cval.contents)
+        return ret
+    elif isinstance(cval, Array):
+        # If it's an array of structures, then this isn't correct
+        # Do we have to check the base type here?
+        if issubclass(cval._type_, Structure):
+            return list(map(resolve, cval[:]))
+        else:
+            return bytes(cval[:])
+    elif isinstance(cval, dict) or isinstance(cval, Structure):
+        # If it's a dict, we got this from an errcheck call using parameters instead of a structure
+        if isinstance(cval, Structure):
+            # Map structure to dict just to ease maintenance
+            cval = struct2dict(cval)
+        f = {}
+        for name, value in cval.items():
+            if name == '_unions_':
+                continue
+            val = value
+            while hasattr(val, "contents"):
+                val = val.contents
+            cls = RawParam.get_base_type(val.__class__)
+            if issubclass(cls, Union):
+                if '_unions_' in cval:
+                    f[cval['_unions_'][name]] = resolve(cval[cval['_unions_'][name]])
+                    f[name] = resolve_union(val, f[cval['_unions_'][name]])
+                else:
+                    f[name] = cval[name]
+            else:
+                f[name] = resolve(cval[name])
+        return f
+    else:
+        return cval
+
+
+# TODO Not sure if I need to return a namedtuple or a dict.  Access is coutnerintuitive
+class AutoStructure(Structure):
+    def __setattr__(self, key, val):
+        found = False
+        for n, t in self._fields_:
+            if n == key:
+                found = True
+                if 'Array' in t.__class__.__name__:
+                    # TODO Check the type for structure vs simple arrays
+                    if issubclass(t._type_, Structure):
+                        # Return a bytes string
+                        for i in range(len(val)):
+                            # Case for arrays of structures
+                            s = getattr(self, key)[i]
+                            s = val[i]
+                    else:
+                        object.__setattr__(self, key, t(*val))
+                elif issubclass(t, AutoStructure):
+                    struct = object.__getattribute__(self, key)
+                    for k, v in val.items():
+                        setattr(struct, k, v)
+                    #object.__setattr__(self, key, struct)
+                else:
+                    object.__setattr__(self, key, t(val))
+        if not found:
+            object.__setattr__(self, key, val)
+
+    def __getattribute__(self, key):
+        found = False
+        for n, t in object.__getattribute__(self, "_fields_"):
+            if n == key:
+                o = object.__getattribute__(self, key)
+                return resolve(o)
+        if not found:
+            return object.__getattribute__(self, key)
+
 
 class RawParam:
     """A raw parameter that resolves to itself.  Useful for debugging
@@ -21,16 +107,18 @@ class RawParam:
         self._param_type = ctype
         self._generate = generator
         self._should_return = should_return
-        def drill(x):
-            if hasattr(x, "contents"):
-                return drill(x._type_)
-            return x
 
-        if switch_is is not None:
-            typ = drill(ctype)
+        if switch_is:
+            typ = RawParam.get_base_type(ctype)
             if not issubclass(typ, Union):
                 raise ValueError("{0} is not a subclass of Union".format(ctype))
             self._switch_is = switch_is
+
+    @staticmethod
+    def get_base_type(cval):
+        if hasattr(cval, "contents"):
+            return RawParam.get_base_type(cval._type_)
+        return cval
 
     @property
     def flags(self):
@@ -64,6 +152,10 @@ class RawParam:
         return instance
 
     @property
+    def switch_is(self):
+        return self._switch_is
+
+    @property
     def has_generator(self):
         """Specifies whether this parameter has a generator.  See :func:`generate`"""
         return self._generate is not None
@@ -73,60 +165,6 @@ class RawParam:
         call every time it is done, which defeats the problem inherent in ctypes in which parameters are reused
         when ctypes functions are specified globally"""
         return self._generate()
-
-
-def struct2dict(cval):
-    if not isinstance(cval, Structure):
-        raise ValueError("Must be a structure")
-    d = {}
-    if hasattr(cval, '_unions_'):
-        d['_unions_'] = cval._unions_
-    for name, typ in cval._fields_:
-        d[name] = getattr(cval, name)
-    return d
-
-
-def resolve(cval):
-    logging.debug("resolve {0}".format(cval))
-
-    def resolve_union(cval, switch):
-        logging.debug(switch)
-        if hasattr(cval.__class__, "_map_"):
-            which = cval._map_[switch]
-            return resolve(getattr(cval, which))
-        else:
-            return cval
-
-    if hasattr(cval, "value"):             # basic type
-        logging.debug("value: {0}".format(cval.value))
-        return cval.value
-    elif hasattr(cval, "contents"):        # pointer type
-        logging.debug("contents: {0}".format(cval.contents))
-        ret = resolve(cval.contents)
-        return ret
-    elif isinstance(cval, Array):
-        logging.debug("Byte array")
-        return bytes(cval[:])
-    elif isinstance(cval, dict) or isinstance(cval, Structure):
-        # If it's a dict, we got this from an errcheck call using parameters instead of a structure
-        if isinstance(cval, Structure):
-            # Map structure to dict just to ease maintenance
-            cval = struct2dict(cval)
-        f = {}
-        for name, value in cval.items():
-            if name == '_unions_':
-                continue
-            if isinstance(value, Union):
-                if '_unions_' in cval:
-                    f[cval['_unions_'][name]] = resolve(cval[cval['_unions_'][name]])
-                    f[name] = resolve_union(cval[name], f[cval['_unions_'][name]])
-                else:
-                    f[name] = cval[name]
-            else:
-                f[name] = resolve(cval[name])
-        return f
-    else:
-        return cval
 
 
 class ResolvedParam(RawParam):
@@ -188,7 +226,10 @@ class HelperFunc:
         d['_unions_'] = {}
         # wrap up the _unions_ field
         for p, a in zip(obj.params, args):
-            if isinstance(a, Union):
+            val = a
+            while hasattr(val, "contents"):
+                val = val.contents
+            if issubclass(RawParam.get_base_type(val.__class__), Union):
                 d['_unions_'][p.name] = p.switch_is
         if not d['_unions_']:
             del d['_unions_']
@@ -198,7 +239,6 @@ class HelperFunc:
             if 'Return' in x.__class__.__name__:
                 # This becomes the dict
                 ret.append(resolved[x.name])
-                # ret.append(obj.params[i].resolve(obj.params[i].name, argdict))
         # Return only the parameters specified by the user
         return ret
 

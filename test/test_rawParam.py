@@ -1,6 +1,7 @@
 from unittest import TestCase
-from ctypeshelper.ctypeshelper import RawParam
 from ctypes import c_ulong, c_uint
+
+from maya.ctypeshelper import RawParam
 
 
 class TestRawParam(TestCase):

@@ -1,9 +1,19 @@
 from ctypes import WINFUNCTYPE, WinError, HRESULT
 from ctypes.wintypes import BOOL, HANDLE
-from ctypeshelper import HelperFunc
+from maya.ctypeshelper import HelperFunc
+from functools import wraps
+import logging
 
 
 __all__ = ['WinFunc', 'HresultWinFunc', 'WinapiWinFunc', 'BoolWinFunc']
+
+
+def trace(fn):
+    @wraps(fn)
+    def inner(*args, **kwargs):
+        logging.debug("{0}({1}{2})".format(fn.__name__, args, kwargs))
+        return fn(*args, **kwargs)
+    return inner
 
 
 class WinFunc(HelperFunc):
@@ -52,6 +62,6 @@ class HandleWinFunc(WinFunc):
 
     @staticmethod
     def errcheck(result, func, args):
-        if result == -1:
+        if result == -1 or not result:
             raise WinError()
-        return args
+        return result

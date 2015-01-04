@@ -2,12 +2,14 @@
 
 from ctypes import *
 from ctypes.wintypes import *
-from ctypeshelper import *
-from .functions import BoolWinFunc, WinapiWinFunc
+
+from maya.ctypeshelper import *
+from maya.winapi.functions import BoolWinFunc, WinapiWinFunc, trace
 
 
 __all__ = ['Advapi32', 'TokenPrivileges', 'WellKnownSidTypes', 'SecurityInformation', 'SECURITY_MAX_SID_SIZE',
-           'TokenAccessRights', 'TOKEN_INFORMATION_CLASS']
+           'TokenInformationClass',
+           'TOKEN_PRIVILEGES']
 
 
 advapi32 = ctypes.windll.advapi32
@@ -22,50 +24,49 @@ ACL = c_ubyte * 1024
 PACL = POINTER(ACL)
 SECURITY_DESCRIPTOR = c_ubyte * 1024
 
-
 # TODO GetTokenInformation needs a union of all possible structures
-class LUID(Structure):
-    _fields_ = [
-        ("LowPart", DWORD),
-        ("HighPart", LONG)
-    ]
+#class LUID(Structure):
+#    _fields_ = [
+#        ("LowPart", DWORD),
+#        ("HighPart", LONG)
+#    ]
+LUID = c_ubyte * 8
 
-
-class SID_AND_ATTRIBUTES(Structure):
+class SID_AND_ATTRIBUTES(AutoStructure):
     _fields_ = [
         ("Sid", PSID),
         ("Attributes", DWORD)
     ]
 
 
-class LUID_AND_ATTRIBUTES(Structure):
+class LUID_AND_ATTRIBUTES(AutoStructure):
     _fields_ = [
         ("Luid", LUID),
         ("Attributes", DWORD)
     ]
 
 
-class TOKEN_GROUPS(Structure):
+class TOKEN_GROUPS(AutoStructure):
     _fields_ = [
         ("GropuCount", DWORD),
         ("Groups", SID_AND_ATTRIBUTES * 64)             # Arbitrarily chose a size.  Should be ANYSIZE_ARRAY
     ]
 
 
-class TOKEN_PRIVILEGES(Structure):
+class TOKEN_PRIVILEGES(AutoStructure):
     _fields_ = [
         ("PrivilegeCount", DWORD),
         ("Privileges", LUID_AND_ATTRIBUTES * 64)        # Arbitrarily chose a size.  Should be ANYSIZE_ARRAY
     ]
 
 
-class TOKEN_USER(Structure):
+class TOKEN_USER(AutoStructure):
     _fields_ = [
         ("User", SID_AND_ATTRIBUTES)
     ]
 
 
-class TOKEN_INFORMATION_CLASS:
+class TokenInformationClass:
     (TokenUser,
      TokenGroups,
      TokenPrivileges,
@@ -109,17 +110,17 @@ class TOKEN_INFORMATION_CLASS:
      MaxTokenInfoClass) = list(range(1, 42))
 
 
-class WellKnownSidType:
+class WellKnownSidTypes:
     WinNullSid = 0
 
 
 class TokenInformation(Union):
     _map_ = {
-        TOKEN_INFORMATION_CLASS.TokenUser: "TokenUser",
-        TOKEN_INFORMATION_CLASS.TokenPrivileges: "TokenPrivileges",
-        TOKEN_INFORMATION_CLASS.TokenGroups: "TokenGroups",
-        TOKEN_INFORMATION_CLASS.TokenImpersonationLevel: "TokenImpersonationLevel",
-        TOKEN_INFORMATION_CLASS.TokenSessionId: "TokenSessionId"
+        TokenInformationClass.TokenUser: "TokenUser",
+        TokenInformationClass.TokenPrivileges: "TokenPrivileges",
+        TokenInformationClass.TokenGroups: "TokenGroups",
+        TokenInformationClass.TokenImpersonationLevel: "TokenImpersonationLevel",
+        TokenInformationClass.TokenSessionId: "TokenSessionId"
     }
 
     _fields_ = [
@@ -129,18 +130,6 @@ class TokenInformation(Union):
         ("TokenImpersonationLevel", DWORD),
         ("TokenSessionId", DWORD)
     ]
-
-
-class TokenAccessRights:
-    TOKEN_ASSIGN_PRIMARY = 0x0001
-    TOKEN_DUPLICATE = 0x0002
-    TOKEN_IMPERSONATE = 0x0004
-    TOKEN_QUERY = 0x0008
-    TOKEN_QUERY_SOURCE = 0x0010
-    TOKEN_ADJUST_PRIVILEGES = 0x0020
-    TOKEN_ADJUST_GROUPS = 0x0040
-    TOKEN_ADJUST_DEFAULT = 0x0080
-    TOKEN_ADJUST_SESSIONID = 0x0100
 
 
 class TokenPrivileges:
@@ -175,6 +164,15 @@ class SecurityInformation:
 #
 # Functions
 #
+_AdjustTokenPrivileges = BoolWinFunc("AdjustTokenPrivileges", advapi32)
+_AdjustTokenPrivileges.params = [
+    InParam(HANDLE, "TokenHandle"),
+    InParam(BOOL, "DisableAllPrivileges", lambda: False),
+    InParam(POINTER(TOKEN_PRIVILEGES), "NewState"),
+    InParam(DWORD, "BufferLength", lambda: sizeof(TOKEN_PRIVILEGES())),
+    ReturnOutParam(POINTER(TOKEN_PRIVILEGES), "PreviousState", lambda: pointer(TOKEN_PRIVILEGES())),
+    OutParam(PDWORD, "ReturnLength", lambda: pointer(DWORD(0)))
+]
 
 # First param must be c_void_p to be received from output of SID producing functions
 # as a bytes string and marshaled properly when passed to other functions
@@ -182,6 +180,12 @@ _ConvertSidToStringSidW = BoolWinFunc("ConvertSidToStringSidW", advapi32)
 _ConvertSidToStringSidW.params = [
     InParam(c_void_p, "sid", None),
     ReturnOutParam(POINTER(LPWSTR), "string_sid", lambda: pointer(c_wchar_p(0)))
+]
+
+_ConvertStringSidToSidW = BoolWinFunc("ConvertStringSidToSidW", advapi32)
+_ConvertStringSidToSidW.params = [
+    InParam(LPWSTR, "StringSid"),
+    ReturnOutParam(PSID, "Sid", lambda: pointer(SID()))
 ]
 
 _CreateWellKnownSid = BoolWinFunc("CreateWellKnownSid", advapi32)
@@ -221,13 +225,24 @@ _GetTokenInformation.params = [
     ReturnOutParam(POINTER(TokenInformation), "TokenInformation",
                    lambda: pointer(TokenInformation()),
                    switch_is="TokenInformationClass"),
-    InParam(DWORD, "TokenInformationLength", lambda: 1024),
+    InParam(DWORD, "TokenInformationLength", lambda: sizeof(TokenInformation)),
     OutParam(PDWORD, "ReturnLength", lambda: pointer(DWORD(0)))
 ]
 
 _ImpersonateSelf = BoolWinFunc("ImpersonateSelf", advapi32)
 _ImpersonateSelf.params = [
     InParam(DWORD, "ImpersonationLevel")
+]
+
+_LookupAccountNameW = BoolWinFunc("LookupAccountNameW", advapi32)
+_LookupAccountNameW.params = [
+    InParam(c_void_p, "system", lambda: None),
+    InParam(LPCSTR, "lpAccountName"),
+    ReturnOutParam(PSID, "sid", lambda: pointer(SID())),
+    InOutParam(LPDWORD, "cbSid", lambda: pointer(sizeof(SID))),
+    ReturnOutParam(LPWSTR, "domain", lambda: create_unicode_buffer(512)),
+    InOutParam(LPDWORD, "cchDomain", lambda: pointer(DWORD(512))),
+    ReturnOutParam(LPDWORD, "peUse", lambda: pointer(DWORD(0)))
 ]
 
 _LookupAccountSidW = BoolWinFunc("LookupAccountSidW", advapi32)
@@ -239,6 +254,22 @@ _LookupAccountSidW.params = [
     ReturnOutParam(LPWSTR, "domain", lambda: create_unicode_buffer(512)),
     InOutParam(LPDWORD, "cchDomain", lambda: pointer(DWORD(512))),
     ReturnOutParam(LPDWORD, "peUse", lambda: pointer(DWORD(0)))
+]
+
+# lpLuid must be a c_void_p to take a byte array representing a LUID
+_LookupPrivilegeNameW = BoolWinFunc("LookupPrivilegeNameW", advapi32)
+_LookupPrivilegeNameW.params = [
+    InParam(LPWSTR, "lpSystemName", lambda: None),
+    InParam(c_void_p, "lpLuid"),
+    ReturnOutParam(LPWSTR, "lpName", lambda: create_unicode_buffer(MAX_PATH)),
+    InOutParam(LPDWORD, "cchName", lambda: pointer(DWORD(MAX_PATH)))
+]
+
+_LookupPrivilegeValueW = BoolWinFunc("LookupPrivilegeValueW", advapi32)
+_LookupPrivilegeValueW.params = [
+    InParam(c_void_p, "lpSystemName", lambda: None),
+    InParam(LPWSTR, "lpName"),
+    ReturnOutParam(POINTER(LUID), "lpLuid", lambda: pointer(LUID()))
 ]
 
 _MakeAbsoluteSD = BoolWinFunc("MakeAbsoluteSD", advapi32)
@@ -268,15 +299,22 @@ _OpenThreadToken.params = [
     InParam(HANDLE, "ThreadHandle"),
     InParam(DWORD, "DesiredAccess"),
     InParam(BOOL, "OpenAsSelf"),
-    ReturnOutParam(PHANDLE, "TokenHandle", pointer(HANDLE(0)))
+    ReturnOutParam(PHANDLE, "TokenHandle", lambda: pointer(HANDLE()))
 ]
 
 _RevertToSelf = BoolWinFunc("RevertToSelf", advapi32)
 
 
-
 class Advapi32:
     """ctypes implementations of Security-related APIs from advapi32.dll"""
+    @staticmethod
+    def AdjustTokenPrivileges(handle,
+                              new_state: TOKEN_PRIVILEGES,
+                              disable_all: bool=False):
+        # What happens if I just pass the structure?
+        # TODO Have to marshall the parameter
+        return _AdjustTokenPrivileges(handle, disable_all, new_state)
+
     @staticmethod
     def ConvertSidToStringSidW(sid) -> str:
         """Converts a security identifier (SID) to a string format suitable for display, storage, or transmission.
@@ -284,6 +322,15 @@ class Advapi32:
         :param sid: Binary security identifier, as a bytes string
         :return: str represening the SID as a string"""
         return _ConvertSidToStringSidW(sid)
+
+    @staticmethod
+    def ConvertStringSidToSidW(sid) -> bytes:
+        """converts a string-format security identifier (SID) into a valid, functional SID.
+
+        :param sid:  the string-format SID to convert.
+        :return: The binary sid corresponding to the string argument
+        """
+        return _ConvertStringSidToSidW(sid)
 
     @staticmethod
     def CreateWellKnownSid(WellKnownSidType) -> SID:
@@ -319,6 +366,7 @@ class Advapi32:
         return _GetSecurityInfo(handle, ObjectType, SecurityInfo)
 
     @staticmethod
+    @trace
     def GetTokenInformation(handle, TokenInformationClass):
         return _GetTokenInformation(handle, TokenInformationClass)
 
@@ -328,6 +376,16 @@ class Advapi32:
         assigned to the calling thread.
         """
         return _ImpersonateSelf()
+
+    @staticmethod
+    def LookupAccountNameW(name, system=None):
+        """The LookupAccountName function accepts the name of a system and an account as input. It retrieves a
+        security identifier (SID) for the account and the name of the domain on which the account was found.
+
+        :param name:  the account name.  A fully qualified (domain\\name) name will yield best results
+        :return: The sid for the corresponding name
+        """
+        return _LookupAccountSidW(system, name)
 
     @staticmethod
     def LookupAccountSidW(sid, system=None):
@@ -340,8 +398,31 @@ class Advapi32:
         """
         return _LookupAccountSidW(system, sid)
 
+    @staticmethod
+    def LookupPrivilegeNameW(luid: bytes, system: str=None):
+        """Retrieves the name that corresponds to the privilege represented on a specific system by a specified
+        locally unique identifier (LUID).
+
+        :param luid: the LUID by which the privilege is known on the target system.
+        :param system: The name of the system on which the privilege name is retrieved
+        :return: String representing the binary LUID
+        """
+        return _LookupPrivilegeNameW(system, luid)
+
+    @staticmethod
+    def LookupPrivilegeValueW(name, system=None):
+        """Retrieves the locally unique identifier (LUID) used on a specified system to locally represent the
+        specified privilege name.
+
+        :param name: The name of the privilege, as defined in the Winnt.h header file.
+        :param system: The name of the system on which the privilege name is retrieved
+        :return: The LUID, as a byte string
+        """
+        return _LookupPrivilegeValueW(system, name)
+
     # MakeAbsoluteSD = _MakeAbsoluteSD
     @staticmethod
+    @trace
     def OpenProcessToken(ProcessHandle, DesiredAccess):
         """Opens the access token associated with a process
 

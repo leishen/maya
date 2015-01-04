@@ -1,6 +1,8 @@
 from unittest import TestCase
-from winapi.registry import RegKey
 import winreg
+
+from maya.winutils.registry import RegKey
+
 
 class TestRegKey(TestCase):
     def test_valid_init(self):

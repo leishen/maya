@@ -3,6 +3,7 @@ from ctypes import *
 # from ctypeshelper import resolve
 import logging
 
+
 def struct2dict(cval):
     if not isinstance(cval, Structure):
         raise ValueError("Must be a structure")
@@ -55,6 +56,7 @@ def resolve(cval):
         return f
     else:
         return cval
+
 
 class TestSubUnion(Union):
     _map_ = {

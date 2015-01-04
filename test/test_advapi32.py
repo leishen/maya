@@ -1,8 +1,8 @@
 from unittest import TestCase
-from winapi.advapi32 import Advapi32, TokenPrivileges, SecurityInformation, TOKEN_INFORMATION_CLASS
 import os.path
 import ctypes
 
+from maya.winapi.advapi32 import Advapi32, TokenPrivileges, SecurityInformation, TokenInformationClass
 
 
 class TestAdvapi32(TestCase):
@@ -48,4 +48,4 @@ class TestAdvapi32(TestCase):
         self.assertEqual(hProc, -1)
         hToken = Advapi32.OpenProcessToken(hProc, TokenPrivileges.TOKEN_QUERY)
         self.assertIsNot(0, hToken, msg="Failed to call OpenProcessToken properly")
-        info = Advapi32.GetTokenInformation(hToken, TOKEN_INFORMATION_CLASS.TokenUser)
+        info = Advapi32.GetTokenInformation(hToken, TokenInformationClass.TokenUser)
