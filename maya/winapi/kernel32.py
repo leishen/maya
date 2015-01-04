@@ -1,63 +1,11 @@
-from ctypes import Structure, c_void_p, c_char, pointer, POINTER, sizeof
-from ctypes.wintypes import DWORD, HANDLE, LONG, HMODULE, LPWSTR, WCHAR, CHAR, BOOL
-import ctypes
-
 from maya.ctypeshelper import *
 from maya.winapi.functions import BoolWinFunc, HandleWinFunc, WinapiWinFunc, trace
+from .types import *
 
+__all__ = ['Kernel32']
 
 kernel32 = ctypes.windll.kernel32
 psapi = ctypes.windll.psapi
-
-MAX_PATH = 0x104
-max_path_wstr = WCHAR * MAX_PATH
-max_path_str = CHAR * MAX_PATH
-
-class ProcessAccessRights:
-    PROCESS_QUERY_INFORMATION = 0x0400
-
-
-class PROCESSENTRY32(Structure):
-    _fields_ = [
-        ("dwSize", DWORD),
-        ("cntUsage", DWORD),
-        ("th32ProcessID", DWORD),
-        ("th32DefaultHeapID", c_void_p),
-        ("th32ModuleID", DWORD),
-        ("cntThreads", DWORD),
-        ("th32ParentProcessID", DWORD),
-        ("pcPriClassBase", LONG),
-        ("dwFlags", DWORD),
-        ("szExeFile", c_char * 0x104)
-    ]
-
-
-class MODULEENTRY32(Structure):
-    _fields_ = [
-        ("dwSize", DWORD),
-        ("th32ModuleID", DWORD),
-        ("th32ProcessID", DWORD),
-        ("GlblcntUsage", DWORD),
-        ("ProccntUsage", DWORD),
-        ("modBaseAddr", c_void_p),
-        ("modBaseSize", DWORD),
-        ("hModule", HMODULE),
-        ("szModule", c_char * (255 + 1)),
-        ("szExePath", c_char * 0x104)
-    ]
-
-
-class THREADENTRY32(Structure):
-    _fields_ = [
-        ("dwSize", DWORD),
-        ("cntUsage", DWORD),
-        ("th32ThreadID", DWORD),
-        ("th32OwnerProcessID", DWORD),
-        ("tpBasePri", LONG),
-        ("tpDeltaPri", LONG),
-        ("dwFlags", DWORD)
-    ]
-
 
 _CloseHandle = BoolWinFunc("CloseHandle", kernel32)
 _CloseHandle.params = [
@@ -126,16 +74,6 @@ _Thread32Next.params = [
     InParam(HANDLE, "hSnapshot"),
     ReturnInOutParam(POINTER(THREADENTRY32), "lpte", lambda: pointer(THREADENTRY32(dwSize=sizeof(THREADENTRY32))))
 ]
-
-
-class Toolhelp32Flags:
-    TH32CS_INHERIT = 0x80000000
-    TH32CS_SNAPHEAPLIST = 0x00000001
-    TH32CS_SNAPPROCESS = 0x00000002
-    TH32CS_SNAPTHREAD = 0x00000004
-    TH32CS_SNAPMODULE = 0x00000008
-    TH32CS_SNAPMODULE32 = 0x00000010
-    TH32CS_SNAPALL = 0x0000001f     # Combination of all other flags
 
 
 class Kernel32:

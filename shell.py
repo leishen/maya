@@ -142,6 +142,7 @@ def test6():
     #        print("Couldn't open {0}".format(proc.pid))
     #    print("")
 
+
 def test7():
     from maya.ctypeshelper import AutoStructure
 

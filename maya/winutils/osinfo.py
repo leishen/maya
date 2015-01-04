@@ -1,6 +1,5 @@
 from ctypes import windll
 from collections import namedtuple
-
 from maya.winapi.kernel32 import *
 from maya.winapi.advapi32 import *
 
@@ -70,18 +69,19 @@ class Token:
 
     @property
     def groups(self):
-        if not self._groups:
-            self._groups = Advapi32.GetTokenInformation(self._hToken, TokenInformationClass.TokenGroups)
-        return self._groups
+        # TODO Groups causes access violation
+        #if not self._groups:
+        #    self._groups = Advapi32.GetTokenInformation(self._hToken, TokenInformationClass.TokenGroups)
+        #return self._groups
+        return None
 
     def close(self):
         Kernel32.CloseHandle(self._hToken)
 
     def __str__(self):
         t = namedtuple('Token', ['user', 'session_id', 'groups', 'privileges'])
-        #return str(t(self.user, self.session_id, self.groups, self.privileges))
-        # TODO Groups causes access violation
-        return str(t(str(self.user), self.session_id, None, list(self.privileges)))
+        return str(t(self.user, self.session_id, self.groups, self.privileges))
+        #return str(t(str(self.user), self.session_id, None, list(self.privileges)))
 
     def __del__(self):
         self.close()
