@@ -113,14 +113,15 @@ def test4():
 
 
 def test6():
-    from maya.winutils.osinfo import whoami, get_effective_token
+    from maya.winutils.osinfo import whoami, get_effective_token, TokenPrivileges
 
     print(whoami())
-    token = get_effective_token()
+    token = get_effective_token(access=TokenPrivileges.TOKEN_QUERY | TokenPrivileges.TOKEN_ADJUST_PRIVILEGES)
     print(token)
     for priv in token.privileges:
         print("Enabling {0}".format(priv.name))
         token.enable_privilege(priv)
+    print(list(token.privileges))
 
     #for proc in find_user_processes("SYSTEM"):
     #    print(proc)
@@ -135,10 +136,9 @@ def test6():
 
 
 if __name__ == "__main__":
-    # logging.basicConfig(level=logging.DEBUG)
 
     # test1()
     # test2()
-    test3()
+    # test3()
     # test4()
-    # test6()
+    test6()

@@ -5,10 +5,18 @@ from ctypes import Structure, Union
 def dict2struct(d, cls):
     x = cls()
     for name, typ in cls._fields_:
-        if issubclass(typ, Union) or issubclass(typ, Structure):
-            setattr(x, name, dict2struct(d[name], typ))
+        t = RawParam.get_base_type(typ)
+        if issubclass(t, Union) or issubclass(t, Structure):
+            setattr(x, name, dict2struct(d[name], t))
         elif 'Array' in typ.__class__.__name__:
-            setattr(x, name, typ(*d[name]))
+            if issubclass(typ._type_, Structure):
+                lst = []
+                arr = getattr(x, name)
+                for i in range(len(d[name])):
+                    arr[i] = dict2struct(d[name][i], typ._type_)
+                #setattr(x, name, *lst)
+            else:
+                setattr(x, name, typ(*d[name]))
         else:
             setattr(x, name, typ(d[name]))
     return x
@@ -25,7 +33,6 @@ def struct2dict(cval):
     return d
 
 
-# TODO New idea: We don't resolve a structure, but only its individual types.
 def resolve(cval):
     def resolve_union(cval, switch):
         if hasattr(cval.__class__, "_map_"):
@@ -40,8 +47,6 @@ def resolve(cval):
         ret = resolve(cval.contents)
         return ret
     elif isinstance(cval, Array):
-        # If it's an array of structures, then this isn't correct
-        # Do we have to check the base type here?
         if issubclass(cval._type_, Structure):
             return list(map(resolve, cval[:]))
         else:
@@ -250,6 +255,7 @@ class HelperFunc:
         retfunc = getattr(self, "errcheck", None)
         if retfunc:
             fn.errcheck = retfunc
+
         #
         # Dictionaries must be converted to their associated structures.  Unfortunately,
         # this is mildly irritating
@@ -260,14 +266,16 @@ class HelperFunc:
             params = [(x.name, x) for x in params]
             # Remove the number of params from args
             for i in range(len(args)):
-                if issubclass(params[i][1].param_type, Structure):
-                    a.append(dict2struct(args[i], params[i][1].param_type))
+                typ = RawParam.get_base_type(params[i][1].param_type)
+                if issubclass(typ, Structure):
+                    a.append(dict2struct(args[i], typ))
                 else:
                     a.append(args[i])
             params = dict(params[len(args):])
             for k, v in kwargs.items():
-                if issubclass(params[k].param_type, Structure):
-                    kw[k] = dict2struct(v, params[k].param_type)
+                typ = RawParam.get_base_type(params[k].param_type)
+                if issubclass(typ, Structure):
+                    kw[k] = dict2struct(v, typ)
                 else:
                     kw[k] = v
             return a, kw

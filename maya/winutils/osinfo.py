@@ -81,8 +81,8 @@ class Token:
 
     def __str__(self):
         t = namedtuple('Token', ['user', 'session_id', 'groups', 'privileges'])
-        return str(t(self.user, self.session_id, self.groups, self.privileges))
-        #return str(t(str(self.user), self.session_id, None, list(self.privileges)))
+        #return str(t(self.user, self.session_id, self.groups, self.privileges))
+        return str(t(str(self.user), self.session_id, None, list(self.privileges)))
 
     def __del__(self):
         self.close()
@@ -93,7 +93,6 @@ class Token:
         # logging.debug("Count: {0}".format(privileges['PrivilegeCount']))
         for i in range(0, privileges['PrivilegeCount']):
             p = privileges['Privileges'][i]
-            print(str(p))
             name = Advapi32.LookupPrivilegeNameW(p['Luid'])
             yield Privilege(name, p['Luid'], p['Attributes'])
 
@@ -101,22 +100,26 @@ class Token:
         if isinstance(priv, Privilege):
             priv = priv.name
         luid = Advapi32.LookupPrivilegeValueW(priv)
-        p = TOKEN_PRIVILEGES()
-        p.PrivilegeCount = 1
-        p.Privileges = [{
-            'Luid': luid,
-            'Attributes': 1
-        }]
+        p = {
+            'PrivilegeCount': 1,
+            'Privileges': [{
+                'Luid': luid,
+                'Attributes': 2     # SE_PRIVILEGE_ENABLED
+            }]
+        }
         Advapi32.AdjustTokenPrivileges(self._hToken, p)
 
     def disable_privilege(self, priv):
         if isinstance(priv, Privilege):
             priv = priv.name
         luid = Advapi32.LookupPrivilegeValueW(priv)
-        p = TOKEN_PRIVILEGES()
-        p.PrivilegeCount = 1
-        p.Privileges[0].Luid = luid
-        p.Privileges[0].Attributes = 0
+        p = {
+            'PrivilegeCount': 1,
+            'Privileges': [{
+                'Luid': luid,
+                'Attributes': 0
+            }]
+        }
         Advapi32.AdjustTokenPrivileges(self._hToken, p)
 
 
@@ -303,11 +306,11 @@ def find_user_processes(username):
             #    yield proc.name, proc.pid
 
 
-def get_effective_token():
+def get_effective_token(access=TokenPrivileges.TOKEN_QUERY):
     hToken = None
     try:
         hThread = windll.kernel32.GetCurrentThread()
-        hToken = Advapi32.OpenThreadToken(hThread, TokenPrivileges.TOKEN_QUERY)
+        hToken = Advapi32.OpenThreadToken(hThread, access)
     except OSError:
         # XXX Make sure error was that token doesn't exist
         pass
@@ -315,7 +318,7 @@ def get_effective_token():
     if not hToken:
         # if that fails, try the process token.  Caller handles this exception
         hProc = windll.kernel32.GetCurrentProcess()
-        hToken = Advapi32.OpenProcessToken(hProc, TokenPrivileges.TOKEN_QUERY)
+        hToken = Advapi32.OpenProcessToken(hProc, access)
 
     return Token(hToken)
 
