@@ -1,6 +1,17 @@
-from _ctypes import Array, Structure, Union
-from ctypes import sizeof
-import logging
+from _ctypes import Array
+from ctypes import Structure, Union
+
+
+def dict2struct(d, cls):
+    x = cls()
+    for name, typ in cls._fields_:
+        if issubclass(typ, Union) or issubclass(typ, Structure):
+            setattr(x, name, dict2struct(d[name], typ))
+        elif 'Array' in typ.__class__.__name__:
+            setattr(x, name, typ(*d[name]))
+        else:
+            setattr(x, name, typ(d[name]))
+    return x
 
 
 def struct2dict(cval):
@@ -14,6 +25,7 @@ def struct2dict(cval):
     return d
 
 
+# TODO New idea: We don't resolve a structure, but only its individual types.
 def resolve(cval):
     def resolve_union(cval, switch):
         if hasattr(cval.__class__, "_map_"):
@@ -60,41 +72,8 @@ def resolve(cval):
         return cval
 
 
-# TODO Not sure if I need to return a namedtuple or a dict.  Access is coutnerintuitive
 class AutoStructure(Structure):
-    def __setattr__(self, key, val):
-        found = False
-        for n, t in self._fields_:
-            if n == key:
-                found = True
-                if 'Array' in t.__class__.__name__:
-                    # TODO Check the type for structure vs simple arrays
-                    if issubclass(t._type_, Structure):
-                        # Return a bytes string
-                        for i in range(len(val)):
-                            # Case for arrays of structures
-                            s = getattr(self, key)[i]
-                            s = val[i]
-                    else:
-                        object.__setattr__(self, key, t(*val))
-                elif issubclass(t, AutoStructure):
-                    struct = object.__getattribute__(self, key)
-                    for k, v in val.items():
-                        setattr(struct, k, v)
-                    #object.__setattr__(self, key, struct)
-                else:
-                    object.__setattr__(self, key, t(val))
-        if not found:
-            object.__setattr__(self, key, val)
-
-    def __getattribute__(self, key):
-        found = False
-        for n, t in object.__getattribute__(self, "_fields_"):
-            if n == key:
-                o = object.__getattribute__(self, key)
-                return resolve(o)
-        if not found:
-            return object.__getattribute__(self, key)
+    pass
 
 
 class RawParam:
@@ -224,7 +203,9 @@ class HelperFunc:
         # Create dictionary of {name: cval}
         d = dict([(x.name, y) for x, y in zip(obj.params, args)])
         d['_unions_'] = {}
-        # wrap up the _unions_ field
+        # For the return values to be meaningful, we have a few things to do:
+        # * drill down through pointers
+        # * resolve unions so that we return the right dictionary
         for p, a in zip(obj.params, args):
             val = a
             while hasattr(val, "contents"):
@@ -233,6 +214,7 @@ class HelperFunc:
                 d['_unions_'][p.name] = p.switch_is
         if not d['_unions_']:
             del d['_unions_']
+        # convert all return values to native python types
         resolved = resolve(d)
         # Return a list of values of the parameters with 'Return' in the class name
         for x in obj.params:
@@ -268,7 +250,30 @@ class HelperFunc:
         retfunc = getattr(self, "errcheck", None)
         if retfunc:
             fn.errcheck = retfunc
-        ret = fn(*args, **kwargs)
+        #
+        # Dictionaries must be converted to their associated structures.  Unfortunately,
+        # this is mildly irritating
+        #
+        def map_args(params, *args, **kwargs):
+            a = []
+            kw = {}
+            params = [(x.name, x) for x in params]
+            # Remove the number of params from args
+            for i in range(len(args)):
+                if issubclass(params[i][1].param_type, Structure):
+                    a.append(dict2struct(args[i], params[i][1].param_type))
+                else:
+                    a.append(args[i])
+            params = dict(params[len(args):])
+            for k, v in kwargs.items():
+                if issubclass(params[k].param_type, Structure):
+                    kw[k] = dict2struct(v, params[k].param_type)
+                else:
+                    kw[k] = v
+            return a, kw
+
+        a, kw = map_args(self._params, *args, **kwargs)
+        ret = fn(*a, **kw)
         # TODO What happens when there are no output parameters???
         if (isinstance(ret, list) or isinstance(ret, tuple)) and len(ret) == 1:
             return ret[0]

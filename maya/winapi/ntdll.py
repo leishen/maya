@@ -19,7 +19,6 @@ _NtQueryInformationProcess.params = [
 #
 # NtQuerySystemInformation
 #
-
 _NtQuerySystemInformation = WinapiWinFunc("ZwQuerySystemInformation", ntdll)
 _NtQuerySystemInformation.params = [
     InParam(DWORD, "SystemInformationClass"),

@@ -2,6 +2,7 @@ from ctypes import windll
 from collections import namedtuple
 from maya.winapi.kernel32 import *
 from maya.winapi.advapi32 import *
+from maya.winapi.types import *
 
 
 Privilege = namedtuple('Privilege', ['name', 'luid', 'attributes'])

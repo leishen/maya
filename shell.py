@@ -112,15 +112,6 @@ def test4():
     print(info)
 
 
-def test5():
-    x = TestStructure()
-    x.switch = 4
-    x.field.four.switch = 3
-    x.field.four.field.three = 42
-    y = resolve(x)
-    print("Frag" + str(y))
-
-
 def test6():
     from maya.winutils.osinfo import whoami, get_effective_token
 
@@ -143,27 +134,6 @@ def test6():
     #    print("")
 
 
-def test7():
-    from maya.ctypeshelper import AutoStructure
-
-    class SubStructure(AutoStructure):
-        _fields_ = [
-            ("Int", c_uint),
-            ("Byte", c_ubyte)
-        ]
-
-    class TestStructure(AutoStructure):
-        _fields_ = [
-            ("Basic", c_ulong),
-            ("Array", c_ubyte * 8),
-            ("MyStruct", SubStructure)
-        ]
-    d = {'Int': 1, 'Byte': 2}
-    struct = TestStructure()
-    print(struct.MyStruct)
-    struct.MyStruct = d
-    print(struct.MyStruct)
-
 if __name__ == "__main__":
     # logging.basicConfig(level=logging.DEBUG)
 
@@ -171,6 +141,4 @@ if __name__ == "__main__":
     # test2()
     test3()
     # test4()
-    test5()
     # test6()
-    test7()
