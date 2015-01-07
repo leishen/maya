@@ -4,11 +4,14 @@ from collections import namedtuple
 
 __all__ = ['Key', 'Value', 'RegKey']
 
-Key = namedtuple('Key', 'subkeys', 'values', 'modified')
-Value = namedtuple('Value', 'name', 'type', 'data')
+Key = namedtuple('Key', ['name', 'subkeys', 'values', 'modified'])
+Value = namedtuple('Value', ['name', 'type', 'data'])
 
 
 class RegKey:
+    """
+    hive is defined in the winreg module
+    """
     def __init__(self, hive, key):
         self._hive = winreg.ConnectRegistry(None, hive)
         self._hkey = winreg.OpenKey(self._hive, key)
@@ -17,7 +20,7 @@ class RegKey:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        winreg.CloseKey(self._handle)
+        winreg.CloseKey(self._hkey)
         winreg.CloseKey(self._hive)
         # Pass any error along to the application
         return False
@@ -30,7 +33,8 @@ class RegKey:
                 key = winreg.EnumKey(self._hkey, i)
                 hkey = winreg.OpenKey(self._hkey, key, access=winreg.KEY_READ)
                 cKeys, cValues, lastmod = winreg.QueryInfoKey(hkey)
-                yield Key(cKeys, cValues, lastmod)
+                yield Key(key, cKeys, cValues, lastmod)
+                i += 1
             except OSError:
                 done = True
 
@@ -41,6 +45,7 @@ class RegKey:
             try:
                 name, data, typ = winreg.EnumValue(self._hkey, i)
                 yield Value(name, typ, data)
+                i += 1
             except OSError:
                 done = True
 
