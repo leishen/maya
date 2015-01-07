@@ -1,60 +1,3 @@
-from ctypes import *
-from maya.ctypeshelper import resolve
-
-
-class TestSubUnion(Union):
-    _map_ = {
-        1: "one",
-        2: "two",
-        3: "three",
-        4: "four"
-    }
-
-    _fields_ = [
-        ("one", c_ulong),
-        ("two", c_byte),
-        ("three", c_size_t),
-        ("four", c_short)
-    ]
-
-
-class TestSubStructure(Structure):
-    _anonymous = ("field",)
-    _fields_ = [
-        ("switch", c_ulong),
-        ("field", TestSubUnion)
-    ]
-
-
-class TestUnion(Union):
-    _map_ = {
-        1: "one",
-        2: "two",
-        3: "three",
-        4: "four"
-    }
-
-    _fields_ = [
-        ("one", c_ulong),
-        ("two", c_ubyte),
-        ("three", c_size_t),
-        ("four", TestSubStructure)
-    ]
-
-
-class TestStructure(Structure):
-    _map_ = {
-        "field": lambda x: x.switch
-    }
-    _fields_ = [
-        ("switch", c_ulong),
-        ("field", TestUnion)
-    ]
-
-
-def errcheck(result, func, args):
-    print(result)
-    return args
 
 
 def test1():
@@ -123,22 +66,32 @@ def test6():
         token.enable_privilege(priv)
     print(list(token.privileges))
 
-    #for proc in find_user_processes("SYSTEM"):
-    #    print(proc)
-    #    try:
-    #        token = proc.get_token()
-    #        print(token.user)
-    #        for p in token.privileges:
-    #            print(p)
-    #    except PermissionError:
-    #        print("Couldn't open {0}".format(proc.pid))
-    #    print("")
+
+def test7():
+    from maya.winutils.osinfo import Snapshot
+    with Snapshot() as snap:
+        for proc in snap.processes:
+            print(proc)
+            try:
+                for mod in proc.modules:
+                    print("    {0}".format(mod))
+            except:
+                pass
+
+
+def test8():
+    from maya.winutils.osinfo import whoami, find_user_processes
+    user = whoami()
+    print(user)
+    for proc in find_user_processes("Greg"):
+        print(proc)
 
 
 if __name__ == "__main__":
-
     # test1()
     # test2()
     # test3()
     # test4()
-    test6()
+    # test6()
+    # test7()
+    test8()

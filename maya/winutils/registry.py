@@ -50,6 +50,5 @@ class RegKey:
         for v in self._iter_values():
             yield v
 
-    def dump(self):
-        pass
+
 

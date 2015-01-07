@@ -1,4 +1,3 @@
-from ctypes import windll
 from collections import namedtuple
 from maya.winapi.kernel32 import *
 from maya.winapi.advapi32 import *
@@ -6,10 +5,15 @@ from maya.winapi.types import *
 
 
 Privilege = namedtuple('Privilege', ['name', 'luid', 'attributes'])
+Module = namedtuple('Module', ['name', 'base', 'size', 'pid', 'path', 'handle'])
+Thread = namedtuple('Thread', ['tid', 'pid', 'flags'])
 
 
 class Principal:
+    """A Windows principal"""
     def __init__(self, name=None, sid=None):
+        if name and sid:
+            raise ValueError("name and sid parameters are mutually exclusive")
         if sid:
             if not isinstance(sid, str):
                 self._binary_sid = sid
@@ -17,7 +21,10 @@ class Principal:
             else:
                 self._sid = sid
                 self._binary_sid = Advapi32.ConvertStringSidToSidW(sid)
-        self._name = name
+        if name:
+            self._name = name
+        else:
+            self._name = None
         # Check for \ or @ in name to get domain
         self._domain = None
 
@@ -36,7 +43,7 @@ class Principal:
     def sid(self):
         if not self._binary_sid:
             # Get the sid
-            self._binary_sid, domain, snu = Advapi32.LookupAccountNameW(self.name)
+            self._binary_sid, domain, snu = Advapi32.LookupAccountNameW(self._name)
             self._sid = Advapi32.ConvertSidToStringSidW(self._binary_sid)
         return self._sid
 
@@ -48,6 +55,7 @@ class Principal:
 
 
 class Token:
+    """A principal's Windows security token"""
     def __init__(self, hToken):
         self._hToken = hToken
         self._user = None
@@ -81,7 +89,7 @@ class Token:
 
     def __str__(self):
         t = namedtuple('Token', ['user', 'session_id', 'groups', 'privileges'])
-        #return str(t(self.user, self.session_id, self.groups, self.privileges))
+        #return str(t(str(self.user), self.session_id, self.groups, list(self.privileges)))
         return str(t(str(self.user), self.session_id, None, list(self.privileges)))
 
     def __del__(self):
@@ -121,53 +129,6 @@ class Token:
             }]
         }
         Advapi32.AdjustTokenPrivileges(self._hToken, p)
-
-
-class Module:
-    def __init__(self, hModule, name, path, base, size, pid):
-        self._hModule = hModule
-        self._name = name
-        self._base = base
-        self._size = size
-        self._pid = pid
-
-    @property
-    def name(self):
-        return self._name
-
-    @property
-    def addr_info(self):
-        return self._base, self._size
-
-    @property
-    def pid(self):
-        return self._pid
-
-    @property
-    def tid(self):
-        return self._tid
-
-    @property
-    def path(self):
-        return self._path
-
-
-class Thread:
-    def __init__(self, tid, pid, flags=0):
-        self._tid = tid
-        self._pid = pid
-        self._flags = flags
-        self._handle = None
-
-    def open(self):
-        raise NotImplementedError()
-
-    def close(self):
-        raise NotImplementedError()
-
-    @property
-    def token(self):
-        raise NotImplementedError()
 
 
 class Process:
@@ -226,21 +187,21 @@ class Process:
     def modules(self):
         snap = Kernel32.CreateToolhelp32Snapshot(Toolhelp32Flags.TH32CS_SNAPMODULE, self._pid)
         module = Kernel32.Module32First(snap)
-        yield Module(module['hModule'],
-                     module['szModule'],
-                     module['szExePath'],
+        yield Module(module['szModule'].decode('utf-8'),
                      module['modBaseAddr'],
                      module['modBaseSize'],
-                     module['th32ProcessID'])
+                     module['th32ProcessID'],
+                     module['szExePath'].decode('utf-8'),
+                     module['hModule'])
         while True:
             try:
                 module = Kernel32.Module32Next(snap)
-                yield Module(module['hModule'],
-                             module['szModule'],
-                             module['szExePath'],
+                yield Module(module['szModule'].decode('utf-8'),
                              module['modBaseAddr'],
                              module['modBaseSize'],
-                             module['th32ProcessID'])
+                             module['th32ProcessID'],
+                             module['szExePath'].decode('utf-8'),
+                             module['hModule'])
             except OSError:
                 # TODO check for done
                 break
@@ -292,20 +253,6 @@ class Snapshot:
                 break
 
 
-def find_user_processes(username):
-    """Find a process owned by user `username`"""
-    with Snapshot() as snap:
-        for proc in snap.processes:
-            if proc.pid == 0 or proc.pid == 4:
-                continue
-            #print(str(proc))
-            yield proc
-            # yield str(proc.name), proc.pid
-            #token = proc.get_token()
-            #if token.user.lower() == username.lower():
-            #    yield proc.name, proc.pid
-
-
 def get_effective_token(access=TokenPrivileges.TOKEN_QUERY):
     hToken = None
     try:
@@ -328,3 +275,32 @@ def whoami():
     # Try the thread token
     token = get_effective_token()
     return token.user
+
+
+def find_user_processes(username):
+    user = whoami()
+    # Our token must have the SeDebug privilege
+    token = get_effective_token(TokenPrivileges.TOKEN_QUERY | TokenPrivileges.TOKEN_ADJUST_PRIVILEGES)
+
+    user_is_self = username.lower() == user.name.lower()
+
+    have_debug = False
+    for priv in token.privileges:
+        if priv.name == 'SeDebugPrivilege':
+            have_debug = True
+
+    if not have_debug and not user_is_self:
+        raise RuntimeError("Must have the SeDebugPrivilege")
+
+    with Snapshot() as snap:
+        for proc in snap.processes:
+            if proc.pid == 0 or proc.pid == 4:
+                continue
+            try:
+                token = proc.get_token()
+                if token.user.name.lower() == username.lower():
+                    yield proc
+            except:
+                continue
+
+

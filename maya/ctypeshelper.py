@@ -1,3 +1,7 @@
+"""ctypeshelper is a module that simplifies ctypes function call creation.
+
+"""
+
 from _ctypes import Array
 from ctypes import Structure, Union
 
@@ -34,6 +38,11 @@ def struct2dict(cval):
 
 
 def resolve(cval):
+    """Given a ctypes value (cval), convert all values into types and values
+    meaningful to Python.
+    :param cval: Ctypes value to resolve
+    :return: python type
+    """
     def resolve_union(cval, switch):
         if hasattr(cval.__class__, "_map_"):
             which = cval._map_[switch]
@@ -84,6 +93,8 @@ class AutoStructure(Structure):
 class RawParam:
     """A raw parameter that resolves to itself.  Useful for debugging
     and for one-off cases only.
+
+    This is the foundation class for all other parameters.
     """
     def __init__(self, name, flags, ctype, generator, should_return, switch_is=None):
         self._name = name
